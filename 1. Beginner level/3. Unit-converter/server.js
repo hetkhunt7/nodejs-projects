@@ -1,24 +1,83 @@
 const http = require('http');
 const path = require('path/win32');
 const url = require('url');
+const { convertLength } = require('./pages/length');
+const { convertWeight } = require('./pages/weight');
+const { convertTemperature } = require('./pages/temperature');
+const { lengthForm, weightForm, temperatureForm } = require('./pages/templates');
+const { resolve } = require('dns');
 
 const PORT = 3000;
 
-const server = http.createServer((req, res) => {
-    const parsedUrl = url.parse(req.url, true);
-    const pathname = parsedUrl.pathname;
+function parseBody(req) {
+    return new Promise((resolve) => {
+        let body = '';
+        req.on('data', chunk => body += chunk.toString());
+        req.on('end', () => {
+            const params = new URLSearchParams(body);
+            resolve({
+                value : params.get('value'),
+                from : params.get('from'),
+                to : params.get('to')
+            });
+        });
+    });
+}
+
+function formatResult(value, from, to, result) {
+    const fromShort = from.slice(0, 3);
+    const toShort = to.slice(0, 3);
+    return `${value} ${fromShort} = ${result} ${toShort}`;
+}
+
+const server = http.createServer(async (req, res) => {
+    const pathname = url.parse(req.url).pathname;
     const method = req.method;
 
-    if(pathname == '/' || pathname == '/length'){
-        handlePage(req, res, 'length')
-    } else if (pathname == '/weight') {
-        handlePage(req, res, 'weight');
-    } else if (pathname == '/temperature') {
-        handlePage(req, res, 'temperature');
-    } else {
-        res.writeHead(404, { 'Content-Type' : 'text/htmp'});
-        res.end(`<h1 >404 - Page Not Found </h1>`);
+    if(pathname == '/' || pathname == '/length') {
+        if(method == 'GET') {
+            return res.end(lengthForm());
+        }
+        if(method == 'POST') {
+            const { value, from, to } = await parseBody(req);
+            const result = convertLength(parseFloat(value), from, to);
+            const display = result !== null ? formatResult(value, from, to, result) : 'invalid conversion';
+            return res.end(lengthForm(display, from, to, value));
+        }
     }
+
+    // WEIGHT
+    if (pathname === '/weight') {
+        if (method === 'GET') {
+        return res.end(weightForm());
+        }
+        if (method === 'POST') {
+        const { value, from, to } = await parseBody(req);
+        const result = convertWeight(parseFloat(value), from, to);
+        const display = result !== null
+            ? formatResult(value, from, to, result)
+            : 'Invalid conversion.';
+        return res.end(weightForm(display, from, to, value));
+        }
+    }
+
+  // TEMPERATURE
+    if (pathname === '/temperature') {
+        if (method === 'GET') {
+        return res.end(temperatureForm());
+        }
+        if (method === 'POST') {
+        const { value, from, to } = await parseBody(req);
+        const result = convertTemperature(parseFloat(value), from, to);
+        const display = result !== null
+            ? formatResult(value, from, to, result)
+            : 'Invalid conversion.';
+        return res.end(temperatureForm(display, from, to, value));
+        }
+    }
+
+    res.writeHead(404, { 'Content-Type' : 'text/htmp'});
+    res.end(`<h1>404 - Page Not Found </h1>`);
 });
 
 function handlePage(req, res, type) {
