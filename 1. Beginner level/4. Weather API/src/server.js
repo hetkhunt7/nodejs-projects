@@ -1,15 +1,17 @@
 require('dotenv').config();
 const express = require('express');
 const weatherRoutes = require('./routes/weather');
+const { limiter } = require('./middleware/rateLimiter');
 const { connectCache } = require('./services/cacheService');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
+app.use(limiter);
 
 //routes
-app.use('weather', weatherRoutes);
+app.use('/weather', weatherRoutes);
 
 //health Check
 app.get('/', (req, res) => {
